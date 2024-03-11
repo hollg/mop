@@ -5,28 +5,10 @@ use crate::{errors::SyntaxError, token::Token};
 pub fn tokenize(source_code: &str) -> Result<Vec<Token>, SyntaxError> {
     let mut tokens: Vec<Token> = vec![];
     let mut chars = source_code.chars().peekable();
-    let mut buffer = String::new();
 
     while let Some(char) = chars.next() {
-        // whitespace means the end of any token,
-        // so if we have a multi-character token building in `buffer`,
-        // build a token from it and push it to the vec
-        if char.is_whitespace() {
-            if !buffer.is_empty() {
-                tokens.push(Token::try_from(buffer.as_str())?);
-                buffer.clear();
-            }
-
-            continue;
-        }
-
-        // single-character tokens
-        if let Ok(token) = Token::try_from(char) {
-            tokens.push(token);
-            continue;
-        }
-
-        // multi-character tokens
+        // first let's figure out whether this character is the start of a multi-character
+        // token
         match char.to_ascii_uppercase() {
             // any char 0..=9 can only appear in a number, so
             // collect all the consecutive number chars from this point
@@ -41,16 +23,22 @@ pub fn tokenize(source_code: &str) -> Result<Vec<Token>, SyntaxError> {
             }
             'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N'
             | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z' => {
-                buffer.push(char);
+                let alpha_string: String = iter::once(char)
+                    .chain(from_fn(|| chars.next_if(|c| c.is_ascii_alphabetic())))
+                    .collect();
+                tokens.push(
+                    Token::try_from(alpha_string.as_str())
+                        .map_err(|_| SyntaxError(alpha_string))?,
+                );
             }
             _ => {
                 return Err(SyntaxError(char.into()));
             }
         }
-
-        if chars.peek().is_none() && !buffer.is_empty() {
-            tokens.push(Token::try_from(buffer.as_str())?);
-            buffer.clear();
+        // single-character tokens
+        if let Ok(token) = Token::try_from(char) {
+            tokens.push(token);
+            continue;
         }
     }
 
