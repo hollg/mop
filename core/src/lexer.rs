@@ -1,3 +1,5 @@
+use std::iter::{self, from_fn};
+
 use crate::{errors::SyntaxError, token::Token};
 
 pub fn tokenize(source_code: &str) -> Result<Vec<Token>, SyntaxError> {
@@ -6,8 +8,9 @@ pub fn tokenize(source_code: &str) -> Result<Vec<Token>, SyntaxError> {
     let mut buffer = String::new();
 
     while let Some(char) = chars.next() {
-        // whitespace is inert, but denotes the end of a multi-character
-        // token
+        // whitespace means the end of any token,
+        // so if we have a multi-character token building in `buffer`,
+        // build a token from it and push it to the vec
         if char.is_whitespace() {
             if !buffer.is_empty() {
                 tokens.push(Token::try_from(buffer.as_str())?);
@@ -25,15 +28,23 @@ pub fn tokenize(source_code: &str) -> Result<Vec<Token>, SyntaxError> {
 
         // multi-character tokens
         match char.to_ascii_uppercase() {
+            // any char 0..=9 can only appear in a number, so
+            // collect all the consecutive number chars from this point
+            // into a String and convert it into a Token
             '0'..='9' => {
-                buffer.push(char);
+                let num_string: String = iter::once(char)
+                    .chain(from_fn(|| chars.next_if(|c| c.is_ascii_digit())))
+                    .collect();
+                tokens.push(
+                    Token::try_from(num_string.as_str()).map_err(|_| SyntaxError(num_string))?,
+                );
             }
             'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N'
             | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z' => {
                 buffer.push(char);
             }
             _ => {
-                return Err(SyntaxError);
+                return Err(SyntaxError(char.into()));
             }
         }
 
@@ -105,6 +116,22 @@ mod test {
                 Token::Number(4),
                 Token::BinaryOperator(BinaryOperator::Division),
                 Token::Number(4),
+                Token::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn process_simple_number_assignment() {
+        let input = "let x = 10";
+
+        assert_eq!(
+            tokenize(input).expect("should be able to tokenize"),
+            vec![
+                Token::Let,
+                Token::Identifier("x".to_string()),
+                Token::Equals,
+                Token::Number(10),
                 Token::Eof
             ]
         );

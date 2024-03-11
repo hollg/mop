@@ -33,7 +33,7 @@ impl TryFrom<char> for Token {
             '*' => Ok(Self::BinaryOperator(BinaryOperator::Multiplication)),
             '/' => Ok(Self::BinaryOperator(BinaryOperator::Division)),
             '-' => Ok(Self::BinaryOperator(BinaryOperator::Subtraction)),
-            _ => Err(SyntaxError),
+            _ => Err(SyntaxError(value.into())),
         }
     }
 }
@@ -42,12 +42,21 @@ impl TryFrom<&str> for Token {
     type Error = SyntaxError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
+        // numbers
         if value.chars().all(|c| c.is_numeric()) {
             return Ok(Token::Number(
-                value.parse::<i32>().map_err(|_| SyntaxError)?,
+                value
+                    .parse::<i32>()
+                    .map_err(|_| SyntaxError(value.into()))?,
             ));
         }
-        Err(SyntaxError)
+
+        if value == "let" {
+            return Ok(Token::Let);
+        }
+
+        Ok(Token::Identifier(value.to_string()))
+        // Err(SyntaxError(value.into()))
     }
 }
 
